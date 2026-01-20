@@ -284,6 +284,14 @@ export const commandlineConfigMetadata: CommandlineConfigMetadataObject = {
       },
     },
   },
+  balancedPolyglot: {
+    subgroup: {
+      options: "fromSchema",
+      afterExec: () => {
+        TestLogic.restart();
+      },
+    },
+  },
   //input
   freedomMode: {
     subgroup: {

@@ -331,6 +331,12 @@ export const configMetadata: ConfigMetadataObject = {
       return Array.from(new Set(value));
     },
   },
+  balancedPolyglot: {
+    icon: "fa-language",
+    displayString: "balanced polyglot",
+    changeRequiresRestart: true,
+    group: "behavior",
+  },
 
   // input
   freedomMode: {

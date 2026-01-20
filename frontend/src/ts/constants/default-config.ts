@@ -91,6 +91,7 @@ const obj: Config = {
   customBackgroundFilter: [0, 1, 1, 1],
   customLayoutfluid: ["qwerty", "dvorak", "colemak"],
   customPolyglot: ["english", "spanish", "french", "german"],
+  balancedPolyglot: false,
   monkeyPowerLevel: "off",
   minBurst: "off",
   minBurstCustomSpeed: 100,
