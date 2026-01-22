@@ -1,6 +1,6 @@
 import Config, { setConfig, setQuoteLengthAll, toggleFunbox } from "../config";
 import * as CustomText from "./custom-text";
-import { Wordset, FunboxWordsFrequency, withWords } from "./wordset";
+import { FunboxWordsFrequency, withWords, IWordset } from "./wordset";
 import QuotesController, {
   Quote,
   QuoteWithTextSplit,
@@ -25,8 +25,11 @@ import {
 import { WordGenError } from "../utils/word-gen-error";
 
 import { showLoaderBar, hideLoaderBar } from "../signals/loader-bar";
-import { PolyglotWordset } from "./funbox/funbox-functions";
-import { LanguageObject } from "@monkeytype/schemas/languages";
+import {
+  PolyglotWordset,
+  UniformPolyglotWordset,
+} from "./funbox/funbox-functions";
+import { Language, LanguageObject } from "@monkeytype/schemas/languages";
 
 //pin implementation
 const random = Math.random;
@@ -347,7 +350,7 @@ async function getFunboxSection(): Promise<string[]> {
 function getFunboxWord(
   word: string,
   wordIndex: number,
-  wordset?: Wordset,
+  wordset?: IWordset,
 ): string {
   const funbox = findSingleActiveFunboxWithFunction("getWord");
 
@@ -387,8 +390,17 @@ async function applyBritishEnglishToWord(
 
 function applyLazyModeToWord(word: string, language: LanguageObject): string {
   // polyglot mode, use the word's actual language
-  if (currentWordset && currentWordset instanceof PolyglotWordset) {
-    const langName = currentWordset.wordsWithLanguage.get(word);
+  if (
+    currentWordset &&
+    (currentWordset instanceof PolyglotWordset ||
+      currentWordset instanceof UniformPolyglotWordset)
+  ) {
+    let langName: Language;
+    if (currentWordset instanceof UniformPolyglotWordset) {
+      langName = currentWordset.currentLanguage as Language;
+    } else {
+      langName = currentWordset.wordsWithLanguage.get(word) as Language;
+    }
     const langProps = langName
       ? currentWordset.languageProperties.get(langName)
       : undefined;
@@ -507,9 +519,9 @@ async function getQuoteWordList(
     // need to re-reverse the words if the test is repeated
     // because it will be reversed again in the generateWords function
     if (wordOrder === "reverse") {
-      return currentWordset.words.reverse();
+      return currentWordset.reverse();
     } else {
-      return currentWordset.words;
+      return currentWordset.get();
     }
   }
   const languageToGet = language.name.startsWith("swiss_german")
@@ -591,7 +603,7 @@ async function getQuoteWordList(
   return TestWords.currentQuote.textSplit;
 }
 
-let currentWordset: Wordset | null = null;
+let currentWordset: IWordset | null = null;
 let currentLanguage: LanguageObject | null = null;
 let isCurrentlyUsingFunboxSection = false;
 
@@ -655,17 +667,16 @@ export async function generateWords(
 
   const funbox = findSingleActiveFunboxWithFunction("withWords");
   if (funbox) {
-    const result = await funbox.functions.withWords(wordList);
+    currentWordset = await funbox.functions.withWords(wordList);
     // PolyglotWordset if polyglot otherwise Wordset
-    if (result instanceof PolyglotWordset) {
-      const polyglotResult = result;
-      currentWordset = polyglotResult;
+    if (
+      currentWordset instanceof PolyglotWordset ||
+      currentWordset instanceof UniformPolyglotWordset
+    ) {
       // set allLigatures if any language in languageProperties has ligatures true
       ret.allLigatures = Array.from(
-        polyglotResult.languageProperties.values(),
+        currentWordset.languageProperties.values(),
       ).some((props) => !!props.ligatures);
-    } else {
-      currentWordset = result;
     }
   } else {
     currentWordset = await withWords(wordList);
@@ -712,12 +723,12 @@ export async function generateWords(
 
   ret.hasTab =
     ret.words.some((w) => w.includes("\t")) ||
-    currentWordset.words.some((w) => w.includes("\t")) ||
+    currentWordset.some((w) => w.includes("\t")) ||
     (Config.mode === "quote" &&
       (quote as QuoteWithTextSplit).textSplit.some((w) => w.includes("\t")));
   ret.hasNewline =
     ret.words.some((w) => w.includes("\n")) ||
-    currentWordset.words.some((w) => w.includes("\n")) ||
+    currentWordset.some((w) => w.includes("\n")) ||
     (Config.mode === "quote" &&
       (quote as QuoteWithTextSplit).textSplit.some((w) => w.includes("\n")));
 
@@ -821,7 +832,7 @@ export async function getNextWord(
       CustomText.getMode() === "random" &&
       (currentWordset.length < 4 || PractiseWords.before.mode !== null)
     ) {
-      randomWord = currentWordset.randomWord(funboxFrequency);
+      // randomWord = currentWordset.randomWord(funboxFrequency);
     } else if (Config.mode === "custom" && CustomText.getMode() === "shuffle") {
       randomWord = currentWordset.shuffledWord();
     } else if (
@@ -901,9 +912,11 @@ export async function getNextWord(
 
   const usingFunboxWithGetWord = isFunboxActiveWithFunction("getWord");
   const randomWordLanguage =
-    (currentWordset instanceof PolyglotWordset
-      ? currentWordset.wordsWithLanguage.get(randomWord)
-      : Config.language) ?? Config.language; // Fall back to Config language if per-word language is unavailable
+    currentWordset instanceof PolyglotWordset
+      ? (currentWordset.wordsWithLanguage.get(randomWord) as Language)
+      : currentWordset instanceof UniformPolyglotWordset
+        ? (currentWordset.currentLanguage as Language)
+        : Config.language; // Fall back to Config language if per-word language is unavailable
 
   if (
     Config.mode !== "custom" &&

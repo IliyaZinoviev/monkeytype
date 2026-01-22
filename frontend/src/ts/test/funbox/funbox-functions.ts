@@ -1,4 +1,9 @@
-import { FunboxWordsFrequency, Wordset } from "../wordset";
+import {
+  AbstractWordset,
+  FunboxWordsFrequency,
+  IWordset,
+  Wordset,
+} from "../wordset";
 import * as GetText from "../../utils/generate";
 import Config, { setConfig, toggleFunbox } from "../../config";
 import * as Misc from "../../utils/misc";
@@ -24,11 +29,13 @@ import { WordGenError } from "../../utils/word-gen-error";
 import { FunboxName, KeymapLayout, Layout } from "@monkeytype/schemas/configs";
 import { Language, LanguageObject } from "@monkeytype/schemas/languages";
 import { qs } from "../../utils/dom";
+import { randomElementFromArray, shuffle } from "../../utils/arrays";
+import { zipfyRandomArrayIndex } from "../../utils/misc";
 
 export type FunboxFunctions = {
-  getWord?: (wordset?: Wordset, wordIndex?: number) => string;
+  getWord?: (wordset?: IWordset, wordIndex?: number) => string;
   punctuateWord?: (word: string) => string;
-  withWords?: (words?: string[]) => Promise<Wordset | PolyglotWordset>;
+  withWords?: (words?: string[]) => Promise<IWordset>;
   alterText?: (word: string, wordIndex: number, wordsBound: number) => string;
   applyConfig?: () => void;
   applyGlobalCSS?: () => void;
@@ -105,8 +112,6 @@ class PseudolangWordGenerator extends Wordset {
   constructor(words: string[]) {
     super(words);
     // Can generate an unbounded number of words in theory.
-    this.length = Infinity;
-
     for (let word of words) {
       // Mark the end of each word with a space.
       word += " ";
@@ -120,6 +125,10 @@ class PseudolangWordGenerator extends Wordset {
         prefix = (prefix + c).slice(-prefixSize);
       }
     }
+  }
+
+  override get length(): number {
+    return Infinity;
   }
 
   public override randomWord(): string {
@@ -159,6 +168,101 @@ export class PolyglotWordset extends Wordset {
     super(wordArray);
     this.wordsWithLanguage = wordsWithLanguage;
     this.languageProperties = languageProperties;
+  }
+}
+
+export class UniformPolyglotWordset extends AbstractWordset<
+  Map<Language, string[]>
+> {
+  readonly words: Map<Language, string[]>;
+  private orderedIndexMap: Map<Language, number> = new Map();
+  private shuffledIndexesMap: Map<Language, number[]> = new Map();
+  private currLang: Language | null = null;
+  public languageProperties: Map<Language, JSONData.LanguageProperties>;
+
+  constructor(
+    words: Map<Language, string[]>,
+    languageProperties: Map<Language, JSONData.LanguageProperties>,
+  ) {
+    super();
+    this.languageProperties = languageProperties;
+    this.words = words;
+    this.resetIndexes();
+  }
+
+  get length(): number {
+    return [...this.words.values()].reduce((sum, arr) => sum + arr.length, 0);
+  }
+
+  get currentLanguage(): Language | null {
+    return this.currLang;
+  }
+
+  resetIndexes(): void {
+    for (const lang of this.languageProperties.keys()) {
+      this.orderedIndexMap.set(lang, 0);
+      this.shuffledIndexesMap.set(lang, []);
+    }
+  }
+
+  private uniformChoiceWords(): Language {
+    const keys = Array.from(this.words.keys());
+    const index = Math.floor(Math.random() * keys.length);
+    this.currLang = keys[index] as Language;
+    return this.currLang;
+  }
+
+  randomWord(mode: FunboxWordsFrequency): string {
+    const lang = this.uniformChoiceWords();
+    const words = this.words.get(lang) as string[];
+    if (mode === "zipf") {
+      return words[zipfyRandomArrayIndex(words.length)] as string;
+    } else {
+      return randomElementFromArray(words);
+    }
+  }
+
+  shuffledWord(): string {
+    const lang = this.uniformChoiceWords();
+    const words = this.words.get(lang) as string[];
+    const shuffledIndex = this.shuffledIndexesMap.get(lang) as number[];
+    if (shuffledIndex.length === 0) {
+      this.generateShuffledIndexes(lang, words.length);
+    }
+    return words[shuffledIndex.pop() as number] as string;
+  }
+
+  generateShuffledIndexes(lang: Language, length: number): void {
+    const shuffledIndexes = this.shuffledIndexesMap.get(lang) as number[];
+    for (let i = 0; i < length; i++) {
+      shuffledIndexes.push(i);
+    }
+    shuffle(shuffledIndexes);
+  }
+
+  nextWord(): string {
+    const lang = this.uniformChoiceWords();
+    const words = this.words.get(lang) as string[];
+    let orderedIndex = this.orderedIndexMap.get(lang) as number;
+    const length = words.length;
+    if (orderedIndex >= length) {
+      orderedIndex = 0;
+    }
+    return words[orderedIndex++] as string;
+  }
+
+  get(): string[] {
+    return this.words.get(this.uniformChoiceWords()) as string[];
+  }
+
+  reverse(): string[] {
+    return this.get().reverse();
+  }
+
+  some(
+    predicate: (value: string, index: number, array: string[]) => boolean,
+  ): boolean {
+    return this.get().some(predicate);
   }
 }
 
@@ -556,7 +660,7 @@ const list: Partial<Record<FunboxName, FunboxFunctions>> = {
     },
   },
   weakspot: {
-    getWord(wordset?: Wordset): string {
+    getWord(wordset?: IWordset): string {
       if (wordset !== undefined) return WeakSpot.getWord(wordset);
       else return "";
     },
@@ -752,19 +856,27 @@ const list: Partial<Record<FunboxName, FunboxFunctions>> = {
       }
 
       // build languageProperties
-      const languageProperties = new Map(
-        languages.map((lang) => [
-          lang.name,
-          {
-            noLazyMode: lang.noLazyMode,
-            ligatures: lang.ligatures,
-            rightToLeft: lang.rightToLeft,
-            additionalAccents: lang.additionalAccents,
-          },
-        ]),
-      );
+      const languageProperties: Map<Language, JSONData.LanguageProperties> =
+        new Map(
+          languages.map((lang) => [
+            lang.name,
+            {
+              noLazyMode: lang.noLazyMode,
+              ligatures: lang.ligatures,
+              rightToLeft: lang.rightToLeft,
+              additionalAccents: lang.additionalAccents,
+            },
+          ]),
+        );
 
-      const wordsWithLanguage = new Map(
+      if (Config.balancedPolyglot) {
+        const words: Map<Language, string[]> = new Map(
+          languages.map((lang) => [lang.name, lang.words]),
+        );
+        return new UniformPolyglotWordset(words, languageProperties);
+      }
+
+      const wordsWithLanguage: Map<string, Language> = new Map(
         languages.flatMap((lang) =>
           lang.words.map((word) => [word, lang.name]),
         ),
