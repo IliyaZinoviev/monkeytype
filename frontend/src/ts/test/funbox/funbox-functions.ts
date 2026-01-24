@@ -28,7 +28,9 @@ import { qs } from "../../utils/dom";
 export type FunboxFunctions = {
   getWord?: (wordset?: Wordset, wordIndex?: number) => string;
   punctuateWord?: (word: string) => string;
-  withWords?: (words?: string[]) => Promise<Wordset | PolyglotWordset>;
+  withWords?: (
+    words?: string[],
+  ) => Promise<Wordset | PolyglotWordset | UniformPolyglotWordset>;
   alterText?: (word: string, wordIndex: number, wordsBound: number) => string;
   applyConfig?: () => void;
   applyGlobalCSS?: () => void;
@@ -159,6 +161,64 @@ export class PolyglotWordset extends Wordset {
     super(wordArray);
     this.wordsWithLanguage = wordsWithLanguage;
     this.languageProperties = languageProperties;
+  }
+}
+
+export class UniformPolyglotWordset extends Wordset {
+  readonly wordsMap: Map<Language, Wordset>;
+  private currLang: Language | null = null;
+  readonly langs: Language[];
+  public languageProperties: Map<Language, JSONData.LanguageProperties>;
+
+  constructor(
+    wordsMap: Map<Language, Wordset>,
+    languageProperties: Map<Language, JSONData.LanguageProperties>,
+  ) {
+    super([]);
+    this.languageProperties = languageProperties;
+    this.langs = Array.from(languageProperties.keys());
+    this.wordsMap = wordsMap;
+    this.resetIndexes();
+    this.length = [...this.wordsMap.values()].reduce(
+      (sum, ws) => sum + ws.words.length,
+      0,
+    );
+  }
+
+  get currentLanguage(): Language | null {
+    return this.currLang;
+  }
+
+  override resetIndexes(): void {
+    this.wordsMap.forEach((ws, _) => {
+      ws.resetIndexes();
+    });
+  }
+
+  private uniformChoiceWords(): Language {
+    const index = Math.floor(Math.random() * this.langs.length);
+    this.currLang = this.langs[index] as Language;
+    return this.currLang;
+  }
+
+  private getWordset(): Wordset {
+    const lang = this.uniformChoiceWords();
+    return this.wordsMap.get(lang) as Wordset;
+  }
+
+  override randomWord(mode: FunboxWordsFrequency): string {
+    const ws = this.getWordset();
+    return ws.randomWord(mode);
+  }
+
+  override shuffledWord(): string {
+    const ws = this.getWordset();
+    return ws.shuffledWord();
+  }
+
+  override nextWord(): string {
+    const ws = this.getWordset();
+    return ws.nextWord();
   }
 }
 
@@ -763,6 +823,13 @@ const list: Partial<Record<FunboxName, FunboxFunctions>> = {
           },
         ]),
       );
+
+      if (Config.balancedPolyglot) {
+        const wordsMap: Map<Language, Wordset> = new Map(
+          languages.map((lang) => [lang.name, new Wordset(lang.words)]),
+        );
+        return new UniformPolyglotWordset(wordsMap, languageProperties);
+      }
 
       const wordsWithLanguage = new Map(
         languages.flatMap((lang) =>
