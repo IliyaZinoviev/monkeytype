@@ -404,6 +404,7 @@ export const ConfigSchema = z
     funbox: FunboxSchema,
     customLayoutfluid: CustomLayoutFluidSchema,
     customPolyglot: CustomPolyglotSchema,
+    balancedPolyglot: z.boolean(),
 
     // input
     freedomMode: z.boolean(),

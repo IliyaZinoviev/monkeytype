@@ -5,17 +5,46 @@ export type FunboxWordsFrequency = "normal" | "zipf";
 
 let currentWordset: Wordset | null = null;
 
-export class Wordset {
-  words: string[];
-  length: number;
-  orderedIndex: number;
-  shuffledIndexes: number[];
+export type IWordset = {
+  readonly length: number;
+  resetIndexes(): void;
+  randomWord(mode: FunboxWordsFrequency): string;
+  shuffledWord(): string;
+  nextWord(): string;
+  get(): string[];
+  reverse(): string[];
+  some(
+    predicate: (value: string, index: number, array: string[]) => boolean,
+  ): boolean;
+};
+
+export abstract class AbstractWordset<T> implements IWordset {
+  abstract readonly words: T;
+  abstract readonly length: number;
+
+  abstract resetIndexes(): void;
+  abstract randomWord(mode: FunboxWordsFrequency): string;
+  abstract shuffledWord(): string;
+  abstract nextWord(): string;
+  abstract get(): string[];
+  abstract reverse(): string[];
+  abstract some(
+    predicate: (value: string, index: number, array: string[]) => boolean,
+  ): boolean;
+}
+
+export class Wordset extends AbstractWordset<string[]> {
+  readonly words: string[];
+  private orderedIndex: number = 0;
+  private shuffledIndexes: number[] = [];
 
   constructor(words: string[]) {
+    super();
     this.words = words;
-    this.length = this.words.length;
-    this.shuffledIndexes = [];
-    this.orderedIndex = 0;
+  }
+
+  get length(): number {
+    return this.words.length;
   }
 
   resetIndexes(): void {
@@ -38,7 +67,7 @@ export class Wordset {
     return this.words[this.shuffledIndexes.pop() as number] as string;
   }
 
-  generateShuffledIndexes(): void {
+  private generateShuffledIndexes(): void {
     this.shuffledIndexes = [];
     for (let i = 0; i < this.length; i++) {
       this.shuffledIndexes.push(i);
@@ -51,6 +80,20 @@ export class Wordset {
       this.orderedIndex = 0;
     }
     return this.words[this.orderedIndex++] as string;
+  }
+
+  get(): string[] {
+    return this.words;
+  }
+
+  reverse(): string[] {
+    return this.words.reverse();
+  }
+
+  some(
+    predicate: (value: string, index: number, array: string[]) => boolean,
+  ): boolean {
+    return this.words.some(predicate);
   }
 }
 

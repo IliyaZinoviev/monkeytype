@@ -242,6 +242,7 @@ async function initGroups(): Promise<void> {
     "customBackgroundSize",
     "button",
   );
+  groups["balancedPolyglot"] = new SettingsGroup("balancedPolyglot", "button");
 }
 
 async function fillSettingsPage(): Promise<void> {

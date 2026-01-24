@@ -115,6 +115,7 @@ export const commands: CommandsSubgroup = {
       ...FunboxCommands,
       "customLayoutfluid",
       "customPolyglot",
+      "balancedPolyglot",
     ),
 
     //input
