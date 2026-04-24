@@ -8,7 +8,15 @@ export type WordsetPick = { word: string; language?: Language };
 
 let currentWordset: Wordset | null = null;
 
-export class Wordset {
+export type IWordset = {
+  length: number;
+  resetIndexes(): void;
+  randomWord(mode: FunboxWordsFrequency): string | WordsetPick;
+  shuffledWord(): string | WordsetPick;
+  nextWord(): string | WordsetPick;
+};
+
+export class Wordset implements IWordset {
   words: string[];
   length: number;
   orderedIndex: number;

@@ -347,7 +347,7 @@ async function getFunboxSection(): Promise<string[]> {
 function getFunboxWord(
   word: string,
   wordIndex: number,
-  wordset?: Wordset,
+  wordset?: Wordset | PolyglotWordset,
 ): string {
   const funbox = findSingleActiveFunboxWithFunction("getWord");
 
@@ -494,8 +494,10 @@ async function getQuoteWordList(
   wordOrder?: FunboxWordOrder,
 ): Promise<string[]> {
   if (TestState.isRepeated) {
-    if (currentWordset === null) {
-      throw new WordGenError("Current wordset is null");
+    if (currentWordset === null || !(currentWordset instanceof Wordset)) {
+      throw new WordGenError(
+        "Current wordset is null or not instance of Wordset",
+      );
     }
 
     TestWords.setCurrentQuote(previousRandomQuote);
@@ -586,7 +588,7 @@ async function getQuoteWordList(
   return TestWords.currentQuote.textSplit;
 }
 
-let currentWordset: Wordset | null = null;
+let currentWordset: Wordset | PolyglotWordset | null = null;
 let currentLanguage: LanguageObject | null = null;
 let isCurrentlyUsingFunboxSection = false;
 
@@ -700,15 +702,20 @@ export async function generateWords(
   if (Config.mode === "quote" && quote === null) {
     throw new WordGenError("Random quote is null");
   }
+  const currentWords =
+    currentWordset instanceof Wordset ? currentWordset.words : [];
 
   ret.hasTab =
     ret.words.some((w) => w.includes("\t")) ||
-    currentWordset.words.some((w) => w.includes("\t")) ||
+    (currentWordset instanceof Wordset &&
+      currentWords.some((w) => w.includes("\t"))) ||
     (Config.mode === "quote" &&
       (quote as QuoteWithTextSplit).textSplit.some((w) => w.includes("\t")));
+
   ret.hasNewline =
     ret.words.some((w) => w.includes("\n")) ||
-    currentWordset.words.some((w) => w.includes("\n")) ||
+    (currentWordset instanceof Wordset &&
+      currentWords.some((w) => w.includes("\n"))) ||
     (Config.mode === "quote" &&
       (quote as QuoteWithTextSplit).textSplit.some((w) => w.includes("\n")));
 
