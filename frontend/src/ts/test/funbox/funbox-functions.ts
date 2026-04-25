@@ -156,14 +156,25 @@ export class PolyglotWordset implements IWordset {
   readonly langs: Language[];
   length: number;
 
-  constructor(
-    wordsetMap: Map<Language, Wordset>,
-    languageProperties: Map<Language, JSONData.LanguageProperties>,
-    length: number,
-  ) {
-    this.languageProperties = languageProperties;
-    this.langs = Array.from(languageProperties.keys());
-    this.wordsetMap = wordsetMap;
+  constructor(languages: LanguageObject[]) {
+    this.languageProperties = new Map<Language, JSONData.LanguageProperties>();
+    this.wordsetMap = new Map<Language, Wordset>();
+    this.length = 0;
+
+    for (const lang of languages) {
+      const count = lang.words.length;
+      this.length += count;
+
+      this.languageProperties.set(lang.name, {
+        noLazyMode: lang.noLazyMode,
+        ligatures: lang.ligatures,
+        rightToLeft: lang.rightToLeft,
+        additionalAccents: lang.additionalAccents,
+      });
+
+      this.wordsetMap.set(lang.name, new Wordset(lang.words));
+    }
+    this.langs = Array.from(this.languageProperties.keys());
     this.length = length;
     this.resetIndexes();
   }
@@ -791,27 +802,8 @@ const list: Partial<Record<FunboxName, FunboxFunctions>> = {
         );
         throw new WordGenError("");
       }
-      const languageProperties = new Map<
-        Language,
-        JSONData.LanguageProperties
-      >();
-      const wordsetMap = new Map<Language, Wordset>();
-      let totalLength = 0;
 
-      for (const lang of languages) {
-        const count = lang.words.length;
-        totalLength += count;
-
-        languageProperties.set(lang.name, {
-          noLazyMode: lang.noLazyMode,
-          ligatures: lang.ligatures,
-          rightToLeft: lang.rightToLeft,
-          additionalAccents: lang.additionalAccents,
-        });
-
-        wordsetMap.set(lang.name, new Wordset(lang.words));
-      }
-      return new PolyglotWordset(wordsetMap, languageProperties, totalLength);
+      return new PolyglotWordset(languages);
     },
   },
 };
